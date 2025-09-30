@@ -105,7 +105,7 @@ write.csv(Final_data, "Final_Data_Valuation_in_2024.csv", row.names = FALSE)
 data2009 <- read.csv("Hamden2009.csv")
 HTML2009 <- all_data[(grepl("2009", all_data$SaleDate)), ]
 data2009$Location <- paste(data2009$prefix, data2009$street, sep = " ")
-Joint2009 <- left_join(final2009, data2009, by = "Location")
+Joint2009 <- left_join(HTML2009, data2009, by = "Location")
 Joint2009 <- Joint2009[!is.na(Joint2009$assessedvalue), ]
 Joint2009 <- filter(Joint2009, SalesPrice >= 50000)
 write.csv(Joint2009, "Final_Data_Valuation_in_2009.csv", row.names = FALSE)
