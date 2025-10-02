@@ -1,0 +1,13 @@
+---
+title: "S&DS 4250"
+author: "Chris, Frank, and Sonam"
+format: pdf
+editor: visual
+---
+
+```{r}
+# Run this just once. It sets up everything. 
+# Everything below assumes this has been run
+source("cleaner.R")
+```
+
