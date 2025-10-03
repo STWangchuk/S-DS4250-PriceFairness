@@ -5,9 +5,64 @@ format: pdf
 editor: visual
 ---
 
-```{r}
-# Run this just once. It sets up everything. 
+## Background
+
+## Cleaning
+
+There were 3 raw sources of data we used in our analysis:
+
+-   Vision's HTML data - Found in the following website: *https://gis.vgsi.com/hamdenct/*. This data was presented as a folder filled with HTML files.
+
+-   CT Dataset - Property data, containing information like location, mailing address, assessed property value, size of the plot of land in acres, floor space in sq ft, whether the property is commercial or residential, etc., and for homes it has details including the number of bedrooms, number of bathrooms, etc. There are columns suggesting that you could also get sale price and sale date, but this information is corrupted.
+
+-   Hamden 2009 - Similar information as the CT dataset, but specific to Hamden and with appraisal values from 2009. This dataset notably does not contain sale prices.
+
+The end goal of our pre-processing would be to generate two cleaned datasets, Valuation2024 and Valuation2009, which have relevant information about many different houses (such as their grade, area, number of rooms, etc.) and also have the appraised value and sale price of the houses. The crucial difference between the two datasets is that one has the valuation dates set at 2024, and the other at 2009, which allows us to check whether any trends we have in the data are consistent across the years.
+
+Much of the cleaning work is obvious, featuring scraping HTMls for relevant information, and merging them on a shared location attribute.
+
+There were 3 decisions I'd like to discuss here:
+
+-   We chose to cut all sale prices that were less than 100000 in our 2024 dataset, and less than 50000 in our 2009 dataset. We did this as there were several houses that were sold for 0, 1, or an incredibly low number, likely representing "non-legitimate" sales (inheritances, gifts, etc.) These numbers were selected based on external research suggesting that this was a reasonable cut off for a true house sale price.
+
+```{r, include=FALSE}
+# Run this just once by un-commenting it. It sets up everything. 
 # Everything below assumes this has been run
-source("cleaner.R")
+
+# source("cleaner.R")
 ```
 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(leaflet)
+library(lubridate)
+Valuation2024 <- read.csv("Final_Data_Valuation_in_2024.csv")
+Valuation2009 <- read.csv("Final_Data_Valuation_in_2009.csv")
+points        <- readRDS("centroids.no.geometry.rds")
+```
+
+-   We chose to narrow our focus to Hamden, specifically since much of our data is Hamden specific, and to better help tailor our answer to the question
+
+-   Much of our analysis will be comparing appraised values to their sale prices, with sale price being our proxy of "fair value". We observed that sales prices become less representative of “fair value” when compared to the appraisal as time passes. Below is a table showing this phenomenon. Note how the median sale prices change as the appraised values remain constant. This makes sense, as appraisal data is collected in 2024, and the value of a house for an old sale (in 1985 for example) has certainly appreciated since then. We will be doing a similar cleaning for the 2009 data, only looking at sales in 2009. Since the assessment companies likely use the same model to assess each house, we safely assume that appraisal trends from 2024 and 2025 sales will apply to the rest of the data. (In other words, if the assessment company’s model over/undervalues certain properties sold in 2024/25, it will also over/undervalue other properties in other years).
+
+```{r}
+Temp <- Valuation2024[(grepl("2021|2022|2023|2024|2025", Valuation2024$SaleDate)), ]
+Temp %>% 
+  mutate(
+    DATE = lubridate::mdy(SaleDate),
+    Year = lubridate::year(DATE)
+  ) %>%
+  group_by(Year) %>%
+  summarise("Median SalesPrice" = median(SalesPrice),
+          "Median TotalAppraisal" = median(TotalAppraised))
+```
+
+
+
+```{r}
+Valuation2024 <- Valuation2024[(grepl("2024|2025", Valuation2024$SaleDate)), ]
+Valuation2009 <- Valuation2009[(grepl("2009", Valuation2009$SaleDate)), ]
+```
+
+## Analysis
