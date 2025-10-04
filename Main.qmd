@@ -5,11 +5,21 @@ format: pdf
 editor: visual
 ---
 
-## Background
+# Report 3: Are Home Appraisals in Hamden unfair?
+
+## Introduction
+
+This report investigates whether residential property assessments in Hamden, CT are fair. The analysis is motivated by a recent case in which a homeowner observed a sharp increase in their property’s assessed value and wishes to contest its accuracy.
+
+From a statistical perspective, our goal is to evaluate whether assessed values align with market sales prices. We treat sales prices as the best available measure of “fair value,” since they reflect what buyers were actually willing to pay, while acknowledging that they are an imperfect but widely accepted benchmark.
+
+Our main metric of comparison is the ratio of assessed value to sales price. A fair assessment would yield ratios centered around 1. We prefer the ratio over absolute differences because it accounts for scale: an excess valuation of \$50,000 is far more consequential for a \$100,000 home than for a \$1,000,000 home.
+
+Methodologically, we begin by compiling and cleaning publicly available property sales data. We then compute ratios across the sample and investigate properties with ratios that deviate significantly from 1, to assess whether systematic patterns explain the discrepancies.
 
 ## Cleaning
 
-There were 3 raw sources of data we used in our analysis:
+There were 4 raw sources of data we used in our analysis:
 
 -   Vision's HTML data - Found in the following website: *https://gis.vgsi.com/hamdenct/*. This data was presented as a folder filled with HTML files.
 
@@ -17,13 +27,19 @@ There were 3 raw sources of data we used in our analysis:
 
 -   Hamden 2009 - Similar information as the CT dataset, but specific to Hamden and with appraisal values from 2009. This dataset notably does not contain sale prices.
 
-The end goal of our pre-processing would be to generate two cleaned datasets, Valuation2024 and Valuation2009, which have relevant information about many different houses (such as their grade, area, number of rooms, etc.) and also have the appraised value and sale price of the houses. The crucial difference between the two datasets is that one has the valuation dates set at 2024, and the other at 2009, which allows us to check whether any trends we have in the data are consistent across the years.
+-   Centroid Data - This just gives us the location coordinates for the properties so that we can plot them on a map. No cleaning was necessary on this dataset.
+
+The end goal of our processing would be to generate two cleaned datasets, Valuation2024 and Valuation2009, which have relevant information about many different houses (such as their grade, area, number of rooms, etc.) and also have the appraised value and sale price of the houses. The crucial difference between the two datasets is that one has the valuation dates set at 2024, and the other at 2009, which allows us to check whether any trends we have in the data are consistent across the years.
 
 Much of the cleaning work is obvious, featuring scraping HTMls for relevant information, and merging them on a shared location attribute.
 
 There were 3 decisions I'd like to discuss here:
 
 -   We chose to cut all sale prices that were less than 100000 in our 2024 dataset, and less than 50000 in our 2009 dataset. We did this as there were several houses that were sold for 0, 1, or an incredibly low number, likely representing "non-legitimate" sales (inheritances, gifts, etc.) These numbers were selected based on external research suggesting that this was a reasonable cut off for a true house sale price.
+
+-   We chose to narrow our focus to Hamden, specifically since much of our data is Hamden specific, and to better help tailor our answer to the question
+
+-   Much of our analysis will be comparing appraised values to their sale prices, with sale price being our proxy of "fair value". We observed that sales prices become less representative of “fair value” when compared to the appraisal as time passes. Below is a table showing this phenomenon. Note how the median sale prices change as the appraised values remain constant. This makes sense, as appraisal data is collected in 2024, and the value of a house for an old sale (in 1985 for example) has certainly appreciated since then. We will be doing a similar cleaning for the 2009 data, only looking at sales in 2009. Since the assessment companies likely use the same model to assess each house, we safely assume that appraisal trends from 2024 and 2025 sales will apply to the rest of the data. (In other words, if the assessment company’s model over/undervalues certain properties sold in 2024/25, it will also over/undervalue other properties in other years).
 
 ```{r, include=FALSE}
 # Run this just once by un-commenting it. It sets up everything. 
@@ -40,13 +56,7 @@ library(lubridate)
 Valuation2024 <- read.csv("Final_Data_Valuation_in_2024.csv")
 Valuation2009 <- read.csv("Final_Data_Valuation_in_2009.csv")
 points        <- readRDS("centroids.no.geometry.rds")
-```
 
--   We chose to narrow our focus to Hamden, specifically since much of our data is Hamden specific, and to better help tailor our answer to the question
-
--   Much of our analysis will be comparing appraised values to their sale prices, with sale price being our proxy of "fair value". We observed that sales prices become less representative of “fair value” when compared to the appraisal as time passes. Below is a table showing this phenomenon. Note how the median sale prices change as the appraised values remain constant. This makes sense, as appraisal data is collected in 2024, and the value of a house for an old sale (in 1985 for example) has certainly appreciated since then. We will be doing a similar cleaning for the 2009 data, only looking at sales in 2009. Since the assessment companies likely use the same model to assess each house, we safely assume that appraisal trends from 2024 and 2025 sales will apply to the rest of the data. (In other words, if the assessment company’s model over/undervalues certain properties sold in 2024/25, it will also over/undervalue other properties in other years).
-
-```{r}
 Temp <- Valuation2024[(grepl("2021|2022|2023|2024|2025", Valuation2024$SaleDate)), ]
 Temp %>% 
   mutate(
@@ -58,11 +68,128 @@ Temp %>%
           "Median TotalAppraisal" = median(TotalAppraised))
 ```
 
-
-
 ```{r}
 Valuation2024 <- Valuation2024[(grepl("2024|2025", Valuation2024$SaleDate)), ]
 Valuation2009 <- Valuation2009[(grepl("2009", Valuation2009$SaleDate)), ]
 ```
 
 ## Analysis
+
+As discussed in the introduction, we begin by computing the price ratios according to the following formula:
+
+$$
+\text{Ratio} = \frac{P_{\text{appraised}}}{P_{\text{sales}}}
+$$
+
+We then compute the mean and median ratio to see if there is any "unfairness" in valuation in aggregate.
+
+```{r}
+Valuation2024 <- Valuation2024 %>% 
+  mutate(ratio = TotalAppraised/SalesPrice) 
+
+Valuation2024 %>%
+  summarize(mean = mean(ratio),
+            median = median(ratio))
+```
+
+The computation suggests that, in the aggregate, assessed values closely approximate sales prices. If anything, the average appraisal appears to undervalue Hamden properties. This undervaluation could reflect the effect of competitive bidding, which may drive sales prices above intrinsic property values. The homeowner who motivated this study, however, was specifically concerned about their property being over-valued, not under-valued.
+
+Beyond aggregate statistics, however, the ratios might be particularly biased for a subset of the properties. To explore this further, we plot the ratios against Log Sales Price. We chose to log transform the x-variable as there is a long right tail of absolute sales prices. We added a horizontal line at y = 1; if all appraisals were fair, then price ratios should stick close to this line.
+
+```{r}
+Valuation2024 <- Valuation2024 %>% mutate(logSalesPrice = log(SalesPrice))
+
+g1 <- Valuation2024 %>% ggplot(aes(x = logSalesPrice, y = ratio)) +
+  geom_point()+
+  geom_hline(yintercept = 1, color = "red") +
+  labs(title = "Ratios for properties of different values",
+       x = "Log Sales Price",
+       y = "Ratio (Appraised Price/Sales Price)") +
+  theme_minimal()
+
+g1
+
+```
+
+While most observations are indeed clustered around the horizontal line with ratio = 1, variation in appraisals appear to widen at low sales prices, with a few clear outliers that are severely overvalued. To emphasize this pattern, we divide the log sales price into bins, and plot the median ratios within each bin.
+
+```{r}
+Valuation2024 <- Valuation2024 %>% mutate(bin = cut(logSalesPrice,
+                                                    breaks = seq(min(logSalesPrice),
+                                                                 max(logSalesPrice),
+                                                                 by = 0.5)))
+
+bin_summary1 <- Valuation2024 %>% 
+  group_by(bin) %>%
+  summarize(
+    meanprice = mean(logSalesPrice, na.rm = TRUE),
+    meanratio = mean(ratio),
+    .groups = "drop")
+
+g1 + geom_point(data = bin_summary1, aes(x = meanprice, y = meanratio), color = "coral",
+                size = 4) +
+  geom_text(data = bin_summary1,
+                aes(x = meanprice, y = meanratio, label = round(meanratio, 2)),
+                size = 3, color = "coral", vjust = -1, fontface = "bold")
+
+```
+
+It's clear that, while the appraisals generally approximate the Sales Prices, the model breaks down at low values. We see the same pattern if we plot the median ratio instead of mean.
+
+```{r}
+bin_summary2 <- Valuation2024 %>% 
+  group_by(bin) %>%
+  summarize(
+    medianprice = median(logSalesPrice, na.rm = TRUE),
+    medianratio = median(ratio),
+    .groups = "drop")
+
+g1 + geom_point(data = bin_summary2, aes(x = medianprice, y = medianratio), color = "coral",
+                size = 4) +
+  geom_text(data = bin_summary2,
+                aes(x = medianprice, y = medianratio, label = round(medianratio, 2)),
+                size = 3, color = "coral", vjust = -1, fontface = "bold")
+```
+
+We will now examine the cause of this unfairness. It is useful to begin by trying to infer / recreate the model that was used by the appraisal companies to derive their appraised values. While we do not have this information, it is easy to predict that kind of variables that they used. Namely, the grade/quality of the house, the area and the number of rooms, and the age of the house (which we can derive from subtracting 2024 by the effective year built of the house)
+
+```{r}
+options(scipen = 5)
+Valuation2024 <- mutate(Valuation2024, age = 2024-eyb)
+model <- lm(TotalAppraised ~ 
+              Total.Rooms + Grade + age + Effective.Area, 
+            data = Valuation2024)
+summary(model)
+```
+
+This model looks very solid, with all of the coefficients for the predictors and the intercept being significant (all p-values are incredibly small) and in the right direction intuitively. The base category for grade is A, which makes all of the values there align with our intuition as well (A++ is the only positive value as A++ is a better grade than A, and everything below that is negative, getting increasingly negative as the grade worsens.) An older house is appraised for less which checks out, and greater effective area is associated with an increased appraisal. The scale and value of the intercept also makes sense for a high quality grade A house.
+
+All of these suggest that this model is similar to the model that is likely used by assessment companies in order to generate their appraisal values.
+
+We can use the valuation2009 data to see if this model is consistently over the years, or if it has changed throughout time (if such changes in the model happen often, that could explain a random spike in appraised values):
+
+```{r}
+Valuation2009 <- mutate(Valuation2009, age = 2009-yearbuilt)
+model <- lm(appraisedvalue ~ 
+              totalrooms + Grade + age + livingarea, 
+            data = Valuation2009)
+summary(model)
+```
+
+This models fits a bit worse, with age not being significant anymore, and the total rooms having a coefficient that is unexpectedly negative. However, there are several explanations for this:
+
+(1) There is significantly less data from 2009
+(2) The year built here is likely a proxy for actual year built, not effective year built as used above (the difference being that the latter accounts for renovations, actual completions dates and so on). When you replace eyb with ayb in the above model, age fails to become relevant again.
+(3) Living area and effective area might not be perfect proxies for each other, which might lead to colinearity with total rooms in this model.
+
+Regardless, the high r-square value and the fact that many of the same coefficients are present and significant suggest that the model is likely similar to the one used in 2024, and that these models do not change randomly on a year by year basis.
+
+The endpoint of this analysis is that the cause of unfairness is not likely to be something that is maliciously built into the model. Rather, it is likely caused by factors that are not captured within the model, while still impacting the sale prices.
+
+## Conclusion
+
+Our overall finding is that on aggregate, appraised values for Hamden properties do not deviate substantially from the market sales price; however, cheaper properties have a higher probability of being overvalued, suggesting that for this subsection of the housing market the appraised values are “unfair.” The discrepancy is particularly serious for properties below XYZ, with the average price ratio of appraised price over sales price reaching XYZ.
+
+Our preliminary hypothesis for this phenomenon is that cheaper households suffer from a variety of unmeasured deficiencies. Possible examples of these deficiencies could include hidden deferred maintenance, weak seller bargaining power, specific historical factors about the house such as a crime, etc. These deficiencies could be disproportionately impactful or present for cheaper houses. We found that our list of observed characteristics were very predictive of appraised values, suggesting that the model used by the appraiser. However, without further research on the exact valuation methodology we cannot reach more definitive conclusions on the mechanisms driving the discrepancy.
+
+A key limitation of our study is that it relied only on sales from the past two years, i.e., recently transacted properties; earlier transactions could not be used because their sale prices are systematically lower than 2024 appraisals, making fair comparisons impossible. While we replicated our findings using 2009 data, the general external validity of the results remains uncertain, as housing market dynamics may differ across time and location. Nonetheless, given that the affected Hamden resident purchased his house recently, our analysis is directly applicable to the context of our research question. Future research could strengthen these findings by comparing earlier sales with contemporaneous appraisals; however, our dataset only contained appraisals for 2009 and 2024, limiting our ability to do so.
